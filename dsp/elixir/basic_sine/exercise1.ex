@@ -1,4 +1,4 @@
-defmodule Audio do
+defmodule Sine do
   @sample_rate 44100
   def generate_samples(frequency, duration) do
     total_samples = trunc(@sample_rate * duration)

@@ -4,6 +4,6 @@ filename = "output.wav"
 duration = 1.0
 frequency = 440
 
-vals = Audio.generate_samples(frequency, duration)
-binary_data = Audio.encode_binary(vals)
-Audio.save_file("output.wav", binary_data)
+vals = Sine.generate_samples(frequency, duration)
+binary_data = Sine.encode_binary(vals)
+Sine.save_file("output.wav", binary_data)
