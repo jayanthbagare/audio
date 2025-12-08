@@ -1,24 +1,6 @@
-defmodule Sine do
+defmodule Write do
   @sample_rate 44100
-  def generate_samples(frequency, duration) do
-    total_samples = trunc(@sample_rate * duration)
-
-    0..total_samples
-    |> Enum.map(fn index ->
-      t = index / @sample_rate
-      :math.sin(2 * :math.pi() * frequency * t)
-    end)
-  end
-
-  def encode_binary(samples) do
-    Enum.map(samples, fn sample ->
-      scaled = trunc(sample * 32767)
-      <<scaled::little-signed-16>>
-    end)
-    |> Enum.into(<<>>)
-  end
-
-  def save_file(filename, data) do
+	def save_wav(filename, data) do
     # Calculate File Size
     data_size = byte_size(data)
     total_size = data_size + 36
@@ -52,4 +34,5 @@ defmodule Sine do
     File.write!(filename, full_file)
     IO.puts("Saved to file #{filename}")
   end
+
 end
