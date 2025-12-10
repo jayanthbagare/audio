@@ -1,0 +1,142 @@
+# Plot_Square_Waves
+
+```elixir
+Mix.install([
+  {:kino_vega_lite, "~> 0.1.13"}
+])
+```
+
+## Section
+
+```elixir
+Code.require_file("~/Projects/audio/dsp/elixir/lib/globalvars.ex")
+Code.require_file("~/Projects/audio/dsp/elixir/lib/audio.ex")
+```
+
+```elixir
+sample_rate = GlobalVars.sample_rate()
+frequency = GlobalVars.frequency()
+duration = GlobalVars.duration()
+attack_t = GlobalVars.attack_t()
+decay_t = GlobalVars.attack_d()
+release_t = GlobalVars.attack_r()
+sustain_level = GlobalVars.sustain_level()
+lfo_frequency = GlobalVars.lfo_frequency()
+lfo_depth = GlobalVars.lfo_depth()
+
+# Sine Wave generator
+samples = Audio.sine(frequency, duration)
+|> Audio.adsr(sample_rate, attack_t, decay_t, release_t, sustain_level)
+|> Audio.tremolo_apply(sample_rate, lfo_frequency, lfo_depth)
+
+# 2. Prepare data for VegaLite (needs a list of Maps)
+data = samples
+  |> Enum.with_index()
+  |> Enum.map(fn {amp, i} -> %{"time" => i, "amplitude" => amp} end)
+
+# 3. Plot it
+VegaLite.new(width: 600, height: 200)
+|> VegaLite.data_from_values(data)
+|> VegaLite.mark(:line)
+|> VegaLite.encode_field(:x, "time", type: :quantitative)
+|> VegaLite.encode_field(:y, "amplitude", type: :quantitative)
+```
+
+```elixir
+# We use a lower sample rate just for the plot so the waves look wider
+
+sample_rate = 8000 
+frequency = 440
+duration = 0.05 # 50ms
+
+samples = Square.generate_precise_samples(frequency, duration) 
+          |> Enum.take(200) # Safety limit
+
+# 2. Prepare data for VegaLite (needs a list of Maps)
+data = samples
+  |> Enum.with_index()
+  |> Enum.map(fn {amp, i} -> %{"time" => i, "amplitude" => amp} end)
+
+# 3. Plot it
+VegaLite.new(width: 600, height: 200)
+|> VegaLite.data_from_values(data)
+|> VegaLite.mark(:line)
+|> VegaLite.encode_field(:x, "time", type: :quantitative)
+|> VegaLite.encode_field(:y, "amplitude", type: :quantitative)
+```
+
+```elixir
+# We use a lower sample rate just for the plot so the waves look wider
+
+sample_rate = 8000 
+frequency = 440
+duration = 0.05 # 50ms
+
+samples = Square.generate_samples(frequency, duration) 
+          |> Enum.take(200) # Safety limit
+
+# 2. Prepare data for VegaLite (needs a list of Maps)
+data = samples
+  |> Enum.with_index()
+  |> Enum.map(fn {amp, i} -> %{"time" => i, "amplitude" => amp} end)
+
+# 3. Plot it
+VegaLite.new(width: 600, height: 200)
+|> VegaLite.data_from_values(data)
+|> VegaLite.mark(:line)a
+|> VegaLite.encode_field(:x, "time", type: :quantitative)
+|> VegaLite.encode_field(:y, "amplitude", type: :quantitative)
+```
+
+```elixir
+# We use a lower sample rate just for the plot so the waves look wider
+
+sample_rate = 8000 
+frequency = 440
+duration = 0.05 # 50ms
+
+samples = Saw.generate_precise_samples(frequency, duration) 
+          |> Enum.take(200) # Safety limit
+
+# 2. Prepare data for VegaLite (needs a list of Maps)
+data = samples
+  |> Enum.with_index()
+  |> Enum.map(fn {amp, i} -> %{"time" => i, "amplitude" => amp} end)
+
+# 3. Plot it
+VegaLite.new(width: 600, height: 200)
+|> VegaLite.data_from_values(data)
+|> VegaLite.mark(:line)
+|> VegaLite.encode_field(:x, "time", type: :quantitative)
+|> VegaLite.encode_field(:y, "amplitude", type: :quantitative)
+```
+
+```elixir
+# triangle wave
+
+sample_rate = 8000 
+frequency = 440
+duration = 0.05 # 50ms
+
+samples = Saw.generate_precise_samples(frequency, duration) 
+          |> Enum.take(200)# Safety limit
+  |> Enum.map(fn ind ->
+    abs(ind) * 2 - 1
+  end)
+
+# 2. Prepare data for VegaLite (needs a list of Maps)
+data = samples
+  |> Enum.with_index()
+  |> Enum.map(fn {amp, i} -> %{"time" => i, "amplitude" => amp} end)
+
+# 3. Plot it
+VegaLite.new(width: 600, height: 200)
+|> VegaLite.data_from_values(data)
+|> VegaLite.mark(:line)
+|> VegaLite.encode_field(:x, "time", type: :quantitative)
+|> VegaLite.encode_field(:y, "amplitude", type: :quantitative)
+```
+
+```elixir
+
+```

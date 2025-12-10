@@ -1,0 +1,192 @@
+Code.require_file("lib/globalvars.ex")
+
+defmodule Audio do
+  @sample_rate GlobalVars.sample_rate()
+  frequency = GlobalVars.frequency()
+  duration = GlobalVars.duration()
+  attack_t = GlobalVars.attack_t()
+  decay_t = GlobalVars.attack_d()
+  release_t = GlobalVars.attack_r()
+  sustain_level = GlobalVars.sustain_level()
+
+  def sine(frequency, duration) do
+    total_samples = trunc(@sample_rate * duration)
+
+    0..total_samples
+    |> Enum.map(fn index ->
+      t = index / @sample_rate
+      :math.sin(2 * :math.pi() * frequency * t)
+    end)
+  end
+
+  def square(frequency, duration) do
+    total_samples = trunc(@sample_rate * duration)
+    nyquist_limit = @sample_rate / 2
+
+    0..total_samples
+    |> Enum.map(fn index ->
+      t = index / @sample_rate
+
+      Stream.iterate(1, &(&1 + 2))
+      |> Stream.take_while(fn n -> n * frequency < nyquist_limit end)
+      |> Enum.reduce(0, fn n, acc ->
+        harmonic_frequency = n * frequency
+        harmonic_amp = 1 / n
+        acc + harmonic_amp * :math.sin(2 * :math.pi() * harmonic_frequency * t)
+      end)
+      |> Kernel.*(4 / :math.pi())
+    end)
+  end
+
+  def saw(frequency, duration) do
+    total_samples = trunc(@sample_rate * duration)
+    nyquist_limit = @sample_rate / 2
+
+    0..total_samples
+    |> Enum.map(fn index ->
+      t = index / @sample_rate
+
+      Stream.iterate(2, &(&1 + 2))
+      |> Stream.take_while(fn n ->
+        n * frequency < nyquist_limit
+      end)
+      |> Enum.reduce(0, fn n, acc ->
+        harmonic_frequency = n * frequency
+        harmonic_amp = 1 / n
+        acc + harmonic_amp * :math.sin(2 * :math.pi() * harmonic_frequency * t)
+      end)
+      |> Kernel.*(2 / :math.pi())
+    end)
+  end
+
+  def triangle(frequency, duration) do
+    total_samples = trunc(@sample_rate * duration)
+    nyquist_limit = @sample_rate / 2
+
+    0..total_samples
+    |> Enum.map(fn index ->
+      t = index / @sample_rate
+
+      Stream.iterate(2, &(&1 + 2))
+      |> Stream.take_while(fn n ->
+        n * frequency < nyquist_limit
+      end)
+      |> Enum.reduce(0, fn n, acc ->
+        harmonic_frequency = n * frequency
+        harmonic_amp = 1 / n
+        acc + harmonic_amp * :math.sin(2 * :math.pi() * harmonic_frequency * t)
+      end)
+      |> Kernel.*(2 / :math.pi())
+    end)
+  end
+
+  def encode_binary(samples) do
+    Enum.map(samples, fn sample ->
+      scaled = trunc(sample * 32767)
+      <<scaled::little-signed-16>>
+    end)
+    |> Enum.into(<<>>)
+  end
+
+  def save_wav(data, filename) do
+    # Calculate File Size
+    data_size = byte_size(data)
+    total_size = data_size + 36
+
+    header = <<
+      # ChunkID
+      "RIFF",
+      # ChunkSize
+      total_size::little-32,
+      # Format 
+      "WAVE",
+      # Subchunk1ID
+      "fmt ",
+      # SubChunk1size(16 for PCM)
+      16::little-32,
+      # Audio Format 
+      1::little-16,
+      # Number of Channels 
+      1::little-16,
+      # sample rate
+      @sample_rate::little-32,
+      # ByteRate(SampleRate * Channels * Bitspersample=> channel is mono here)
+      @sample_rate * 2::little-32,
+      2::little-16,
+      16::little-16,
+      "data",
+      data_size::little-32
+    >>
+
+    full_file = header <> data
+    File.write!(filename, full_file)
+    IO.puts("Saved to file #{filename}")
+  end
+
+  def adsr(sample, sample_rate, attack_t, decay_t, release_t, sustain_level) do
+    total_count = length(sample)
+
+    # Convert seconds to sample counts
+    sample_a = trunc(attack_t * sample_rate)
+    sample_d = trunc(decay_t * sample_rate)
+    sample_r = trunc(release_t * sample_rate)
+
+    sample_s = total_count - (sample_a + sample_r + sample_d)
+
+    sample
+    |> Enum.with_index()
+    |> Enum.map(fn {sample_val, i} ->
+      multiplier =
+        cond do
+          # attack 
+          i < sample_a ->
+            i / sample_a
+
+          i < sample_a + sample_d ->
+            progress = (i - sample_a) / sample_d
+            1.0 - progress * (1.0 - sustain_level)
+
+          i < sample_a + sample_d + sample_s ->
+            sustain_level
+
+          true ->
+            remaining_samples = total_count - i
+            remaining_samples / sample_r * sustain_level
+        end
+
+      sample_val * multiplier
+    end)
+  end
+
+  def tremolo_apply(sample, sample_rate, lfo_frequency, lfo_depth) do
+    total_count = length(sample)
+
+    lfo_values =
+      0..(total_count - 1)
+      |> Enum.map(fn i ->
+        t = i / sample_rate
+        raw = :math.sin(2 * :math.pi() * lfo_frequency * t)
+        # Shift the raw to unipolar
+        unipolar = (raw + 1.0) / 2.0
+
+        # Apply lfo_depth
+        1.0 - lfo_depth * unipolar
+      end)
+
+    Enum.zip(sample, lfo_values)
+    |> Enum.map(fn {sample, lfo_values} -> sample * lfo_values end)
+  end
+  def apply_low_pass_filter(sample,alpha) do
+    Enum.scan(sample,0.0,fn sample,prev_output -> 
+      prev_output + alpha * (sample - prev_output)
+    end)
+  end
+
+  def calculate_alpha(cutoff_hz, sample_rate \\ @sample_rate) do
+    # Avoid negative or zero frequency issues
+    cutoff_hz = max(cutoff_hz, 1.0)
+    
+    # Calculate alpha
+    1.0 - :math.exp(-2.0 * :math.pi() * cutoff_hz / sample_rate)
+  end
+end

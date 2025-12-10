@@ -1,9 +1,5 @@
 Code.require_file("lib/globalvars.ex")
-
-Code.require_file("lib/encoder.ex")
-Code.require_file("lib/adsr.ex")
-Code.require_file("lib/generator.ex")
-Code.require_file("lib/writer.ex")
+Code.require_file("lib/audio.ex")
 
 sample_rate = GlobalVars.sample_rate()
 frequency = GlobalVars.frequency()
@@ -12,34 +8,45 @@ attack_t = GlobalVars.attack_t()
 decay_t = GlobalVars.attack_d()
 release_t = GlobalVars.attack_r()
 sustain_level = GlobalVars.sustain_level()
+lfo_frequency = GlobalVars.lfo_frequency()
+lfo_depth = GlobalVars.lfo_depth()
+cutoff_frequency = GlobalVars.cutoff_frequency()
+
+alpha = Audio.calculate_alpha(cutoff_frequency,1.0)
 
 # Sine Wave generator
 filename = "sine.wav"
-sine = Generate.sine(frequency, duration)
-sine_samples = Envelope.adsr(sine, sample_rate, attack_t, decay_t, release_t, sustain_level)
-sine_data = Encode.binary(sine_samples)
-Write.save_wav(filename, sine_data)
+Audio.sine(frequency, duration)
+|> Audio.adsr(sample_rate, attack_t, decay_t, release_t, sustain_level)
+|> Audio.tremolo_apply(sample_rate, lfo_frequency, lfo_depth)
+|> Audio.encode_binary()
+|> Audio.save_wav(filename)
 
-# Square Wave generator
+# Square wave tremolo generator
 filename = "square.wav"
-square = Generate.square(frequency, duration)
-square_samples = Envelope.adsr(square, sample_rate, attack_t, decay_t, release_t, sustain_level)
-square_data = Encode.binary(square_samples)
-Write.save_wav(filename, square_data)
 
-# Saw Wave generator
+Audio.square(frequency, duration)
+|> Audio.adsr(sample_rate, attack_t, decay_t, release_t, sustain_level)
+|> Audio.tremolo_apply(sample_rate, lfo_frequency, lfo_depth)
+|> Audio.apply_low_pass_filter(alpha)
+|> Audio.encode_binary()
+|> Audio.save_wav(filename)
+
+# Saw wave tremolo generator
 filename = "saw.wav"
-saw = Generate.saw(frequency, duration)
-saw_samples = Envelope.adsr(saw, sample_rate, attack_t, decay_t, release_t, sustain_level)
-saw_data = Encode.binary(saw_samples)
-Write.save_wav(filename, saw_data)
 
-# Triangle Wave generator
+Audio.saw(frequency, duration)
+|> Audio.adsr(sample_rate, attack_t, decay_t, release_t, sustain_level)
+|> Audio.tremolo_apply(sample_rate, lfo_frequency, lfo_depth)
+|> Audio.apply_low_pass_filter(alpha)
+|> Audio.encode_binary()
+|> Audio.save_wav(filename)
+
+# Triangle wave tremolo generator
 filename = "triangle.wav"
-triangle = Generate.triangle(frequency, duration)
 
-triangle_samples =
-  Envelope.adsr(triangle, sample_rate, attack_t, decay_t, release_t, sustain_level)
-
-triangle_data = Encode.binary(triangle_samples)
-Write.save_wav(filename, triangle_data)
+Audio.triangle(frequency, duration)
+|> Audio.adsr(sample_rate, attack_t, decay_t, release_t, sustain_level)
+|> Audio.tremolo_apply(sample_rate, lfo_frequency, lfo_depth)
+|> Audio.encode_binary()
+|> Audio.save_wav(filename)
