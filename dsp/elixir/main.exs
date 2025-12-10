@@ -12,10 +12,9 @@ lfo_frequency = GlobalVars.lfo_frequency()
 lfo_depth = GlobalVars.lfo_depth()
 cutoff_frequency = GlobalVars.cutoff_frequency()
 
-alpha = Audio.calculate_alpha(cutoff_frequency,1.0)
-
 # Sine Wave generator
 filename = "sine.wav"
+
 Audio.sine(frequency, duration)
 |> Audio.adsr(sample_rate, attack_t, decay_t, release_t, sustain_level)
 |> Audio.tremolo_apply(sample_rate, lfo_frequency, lfo_depth)
@@ -28,7 +27,7 @@ filename = "square.wav"
 Audio.square(frequency, duration)
 |> Audio.adsr(sample_rate, attack_t, decay_t, release_t, sustain_level)
 |> Audio.tremolo_apply(sample_rate, lfo_frequency, lfo_depth)
-|> Audio.apply_low_pass_filter(alpha)
+|> Audio.apply_low_pass(cutoff_frequency)
 |> Audio.encode_binary()
 |> Audio.save_wav(filename)
 
@@ -38,7 +37,7 @@ filename = "saw.wav"
 Audio.saw(frequency, duration)
 |> Audio.adsr(sample_rate, attack_t, decay_t, release_t, sustain_level)
 |> Audio.tremolo_apply(sample_rate, lfo_frequency, lfo_depth)
-|> Audio.apply_low_pass_filter(alpha)
+|> Audio.apply_low_pass(cutoff_frequency)
 |> Audio.encode_binary()
 |> Audio.save_wav(filename)
 

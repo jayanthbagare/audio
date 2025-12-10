@@ -8,5 +8,5 @@ defmodule GlobalVars do
   def sustain_level, do: 0.7
   def lfo_frequency, do: 2
   def lfo_depth, do: 0.7
-  def cutoff_frequency, do: 100
+  def cutoff_frequency, do: 2000
 end

@@ -1,0 +1,109 @@
+Code.require_file("lib/globalvars.ex")
+Code.require_file("lib/audio.ex")
+
+# --- 1. DEFINE INSTRUMENTS ---
+
+# KICK: Pitch slide from 150Hz to 50Hz + fast decay envelope
+kick_fn = fn _, duration ->
+  Audio.generate_pitch_slide(150.0, 50.0, duration)
+  # Sharp attack, fast decay
+  |> Audio.adsr(44100, 0.005, 0.3, 0.0, 0.0)
+end
+
+# HI-HAT: White Noise + very short envelope
+hat_fn = fn _, duration ->
+  Audio.generate_noise(duration)
+  # "Tsst" sound
+  |> Audio.adsr(44100, 0.005, 0.05, 0.0, 0.0)
+end
+
+# LEAD: Sawtooth + Filter (Your existing patch)
+lead_fn = fn freq, duration ->
+  Audio.square(freq, duration)
+  |> Audio.adsr(44100, 0.01, 0.1, 0.5, 0.1)
+  |> Audio.apply_low_pass(2000)
+end
+
+# --- 2. DEFINE SCORES ---
+
+bpm = 136
+# Quarter note (Kick)
+beat = 60 / bpm
+# Eighth note (Hi-Hat)
+half_beat = beat / 2
+# 16th note (Lead) - approx
+t = 0.11
+
+# The Drums (4 beats loop)
+kick_score = for _ <- 1..4, do: %{note: :C, octave: 1, duration: beat}
+
+# The Hi-Hats (Off-beats: Rest, Hat, Rest, Hat...)
+# We sequence "silence" by using a dummy note with 0 volume or just careful timing.
+# Simpler approach: We sequence 8 notes, playing on the even ones.
+hat_score =
+  Enum.flat_map(1..4, fn _ ->
+    [
+      # Silence
+      %{note: :rest, octave: 0, duration: half_beat},
+      # Hat
+      %{note: :C, octave: 0, duration: half_beat}
+    ]
+  end)
+
+# NOTE: To make "rest" work, your sequencer needs to handle it.
+# Hack for now: We will just generate silence in the instrument function if note is :rest
+
+# The Lead (Same as before, simplified for space)
+lead_score = [
+  %{note: :B, octave: 4, duration: t},
+  %{note: :B, octave: 4, duration: t},
+  %{note: :B, octave: 4, duration: t},
+  %{note: :B, octave: 4, duration: t},
+  # Da-da-da-da-da
+  %{note: :B, octave: 4, duration: t},
+  %{note: :B, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t}
+  # (Feel free to extend this pattern)
+]
+
+# --- 3. GENERATE AUDIO ---
+
+# Helper to handle "rests" (silence)
+safe_hat_fn = fn freq, dur ->
+  if freq == 0, do: Audio.sine(0, dur) |> Enum.map(fn _ -> 0.0 end), else: hat_fn.(freq, dur)
+end
+
+# Update sequencer to handle :rest (returning 0 Hz)
+# You might need to tweak your get_freq to return 0 for :rest
+# Or just manually use a frequency of 0 in the score for silence.
+
+# GENERATE TRACKS
+# Note: For mixing, tracks must be roughly same length. 
+# The Lead is shorter in this example, so the drums will continue after it stops.
+kick_audio = Audio.sequence(kick_score, kick_fn)
+
+hat_audio =
+  Audio.sequence(hat_score, fn f, d ->
+    if f < 20, do: Audio.sine(0, d) |> Enum.map(fn _ -> 0.0 end), else: hat_fn.(f, d)
+  end)
+
+lead_audio = Audio.sequence(lead_score, lead_fn)
+
+# --- 4. MIX & SAVE ---
+# We mix Kick and Lead (and Hats if you fixed the rest logic)
+full_track =
+  Audio.mix([
+    kick_audio,
+    lead_audio
+    # hat_audio # Uncomment if you implemented the silence logic!
+  ])
+  # Master Gain to prevent clipping
+  |> Enum.map(fn x -> x * 0.4 end)
+  |> Audio.encode_binary()
+  |> Audio.save_wav("sandstorm_full.wav")

@@ -10,7 +10,8 @@ Mix.install([
 ## Section
 
 ```elixir
-alias VegaLite, as: Vl
+File.cd!("/Users/jayanthbagare/Projects/audio/dsp/elixir")
+File.cwd()
 ```
 
 ```elixir
@@ -18,229 +19,94 @@ Code.require_file("lib/globalvars.ex",__DIR__)
 ```
 
 ```elixir
-defmodule Audio do
-  @sample_rate GlobalVars.sample_rate()
-  frequency = GlobalVars.frequency()
-  duration = GlobalVars.duration()
-  attack_t = GlobalVars.attack_t()
-  decay_t = GlobalVars.attack_d()
-  release_t = GlobalVars.attack_r()
-  sustain_level = GlobalVars.sustain_level()
-
-  def sine(frequency, duration) do
-    total_samples = trunc(@sample_rate * duration)
-
-    0..total_samples
-    |> Enum.map(fn index ->
-      t = index / @sample_rate
-      :math.sin(2 * :math.pi() * frequency * t)
-    end)
-  end
-
-  def square(frequency, duration) do
-    total_samples = trunc(@sample_rate * duration)
-    nyquist_limit = @sample_rate / 2
-
-    0..total_samples
-    |> Enum.map(fn index ->
-      t = index / @sample_rate
-
-      Stream.iterate(1, &(&1 + 2))
-      |> Stream.take_while(fn n -> n * frequency < nyquist_limit end)
-      |> Enum.reduce(0, fn n, acc ->
-        harmonic_frequency = n * frequency
-        harmonic_amp = 1 / n
-        acc + harmonic_amp * :math.sin(2 * :math.pi() * harmonic_frequency * t)
-      end)
-      |> Kernel.*(4 / :math.pi())
-    end)
-  end
-
-  def saw(frequency, duration) do
-    total_samples = trunc(@sample_rate * duration)
-    nyquist_limit = @sample_rate / 2
-
-    0..total_samples
-    |> Enum.map(fn index ->
-      t = index / @sample_rate
-
-      Stream.iterate(2, &(&1 + 2))
-      |> Stream.take_while(fn n ->
-        n * frequency < nyquist_limit
-      end)
-      |> Enum.reduce(0, fn n, acc ->
-        harmonic_frequency = n * frequency
-        harmonic_amp = 1 / n
-        acc + harmonic_amp * :math.sin(2 * :math.pi() * harmonic_frequency * t)
-      end)
-      |> Kernel.*(2 / :math.pi())
-    end)
-  end
-
-  def triangle(frequency, duration) do
-    total_samples = trunc(@sample_rate * duration)
-    nyquist_limit = @sample_rate / 2
-
-    0..total_samples
-    |> Enum.map(fn index ->
-      t = index / @sample_rate
-
-      Stream.iterate(2, &(&1 + 2))
-      |> Stream.take_while(fn n ->
-        n * frequency < nyquist_limit
-      end)
-      |> Enum.reduce(0, fn n, acc ->
-        harmonic_frequency = n * frequency
-        harmonic_amp = 1 / n
-        acc + harmonic_amp * :math.sin(2 * :math.pi() * harmonic_frequency * t)
-      end)
-      |> Kernel.*(2 / :math.pi())
-    end)
-  end
-
-  def encode_binary(samples) do
-    Enum.map(samples, fn sample ->
-      scaled = trunc(sample * 32767)
-      <<scaled::little-signed-16>>
-    end)
-    |> Enum.into(<<>>)
-  end
-
-  def save_wav(data, filename) do
-    # Calculate File Size
-    data_size = byte_size(data)
-    total_size = data_size + 36
-
-    header = <<
-      # ChunkID
-      "RIFF",
-      # ChunkSize
-      total_size::little-32,
-      # Format 
-      "WAVE",
-      # Subchunk1ID
-      "fmt ",
-      # SubChunk1size(16 for PCM)
-      16::little-32,
-      # Audio Format 
-      1::little-16,
-      # Number of Channels 
-      1::little-16,
-      # sample rate
-      @sample_rate::little-32,
-      # ByteRate(SampleRate * Channels * Bitspersample=> channel is mono here)
-      @sample_rate * 2::little-32,
-      2::little-16,
-      16::little-16,
-      "data",
-      data_size::little-32
-    >>
-
-    full_file = header <> data
-    File.write!(filename, full_file)
-    IO.puts("Saved to file #{filename}")
-  end
-
-  def adsr(sample, sample_rate, attack_t, decay_t, release_t, sustain_level) do
-    total_count = length(sample)
-
-    # Convert seconds to sample counts
-    sample_a = trunc(attack_t * sample_rate)
-    sample_d = trunc(decay_t * sample_rate)
-    sample_r = trunc(release_t * sample_rate)
-
-    sample_s = total_count - (sample_a + sample_r + sample_d)
-
-    sample
-    |> Enum.with_index()
-    |> Enum.map(fn {sample_val, i} ->
-      multiplier =
-        cond do
-          # attack 
-          i < sample_a ->
-            i / sample_a
-
-          i < sample_a + sample_d ->
-            progress = (i - sample_a) / sample_d
-            1.0 - progress * (1.0 - sustain_level)
-
-          i < sample_a + sample_d + sample_s ->
-            sustain_level
-
-          true ->
-            remaining_samples = total_count - i
-            remaining_samples / sample_r * sustain_level
-        end
-
-      sample_val * multiplier
-    end)
-  end
-
-  def tremolo_apply(sample, sample_rate, lfo_frequency, lfo_depth) do
-    total_count = length(sample)
-
-    lfo_values =
-      0..(total_count - 1)
-      |> Enum.map(fn i ->
-        t = i / sample_rate
-        raw = :math.sin(2 * :math.pi() * lfo_frequency * t)
-        # Shift the raw to unipolar
-        unipolar = (raw + 1.0) / 2.0
-
-        # Apply lfo_depth
-        1.0 - lfo_depth * unipolar
-      end)
-
-    Enum.zip(sample, lfo_values)
-    |> Enum.map(fn {sample, lfo_values} -> sample * lfo_values end)
-  end
-  def apply_low_pass_filter(sample,alpha) do
-    Enum.scan(sample,0.0,fn sample,prev_output -> 
-      prev_output + alpha * (sample - prev_output)
-    end)
-  end
-
-  def calculate_alpha(cutoff_hz, sample_rate \\ @sample_rate) do
-    # Avoid negative or zero frequency issues
-    cutoff_hz = max(cutoff_hz, 1.0)
-    
-    # Calculate alpha
-    1.0 - :math.exp(-2.0 * :math.pi() * cutoff_hz / sample_rate)
-  end
-end
-
+Code.require_file("lib/audio.ex",__DIR__)
 ```
 
 ```elixir
-sample_rate = GlobalVars.sample_rate()
-frequency = GlobalVars.frequency()
-duration = GlobalVars.duration()
-attack_t = GlobalVars.attack_t()
-decay_t = GlobalVars.attack_d()
-release_t = GlobalVars.attack_r()
-sustain_level = GlobalVars.sustain_level()
-lfo_frequency = GlobalVars.lfo_frequency()
-lfo_depth = GlobalVars.lfo_depth()
-cutoff_frequency = GlobalVars.cutoff_frequency()
+# --- 1. DEFINE INSTRUMENTS ---
 
-alpha = Audio.calculate_alpha(cutoff_frequency,1.0)
+# KICK: Pitch slide from 150Hz to 50Hz + fast decay envelope
+kick_fn = fn _, duration ->
+  Audio.generate_pitch_slide(150.0, 50.0, duration)
+  |> Audio.adsr(44100, 0.005, 0.3, 0.0, 0.0) # Sharp attack, fast decay
+end
 
-# Sine Wave generator
-samples = Audio.square(frequency, duration)
-|> Audio.adsr(sample_rate, attack_t, decay_t, release_t, sustain_level)
-|> Audio.tremolo_apply(sample_rate, lfo_frequency, lfo_depth)
-|> Audio.apply_low_pass_filter(alpha)
-|> Enum.take(200)
+# HI-HAT: White Noise + very short envelope
+hat_fn = fn _, duration ->
+  Audio.generate_noise(duration)
+  |> Audio.adsr(44100, 0.005, 0.05, 0.0, 0.0) # "Tsst" sound
+end
 
-# 2. Prepare data for VegaLite (needs a list of Maps)
-data = samples
-  |> Enum.with_index()
-  |> Enum.map(fn {amp, i} -> %{"time" => i, "amplitude" => amp} end)
+# LEAD: Sawtooth + Filter (Your existing patch)
+lead_fn = fn freq, duration ->
+  Audio.square(freq, duration)
+  |> Audio.adsr(44100, 0.01, 0.1, 0.5, 0.1)
+  |> Audio.apply_low_pass(2000) 
+end
 
-# 3. Plot it
-VegaLite.new(width: 800, height: 300)
-|> VegaLite.data_from_values(data)
-|> VegaLite.mark(:line)
-|> VegaLite.encode_field(:x, "time", type: :quantitative)
-|> VegaLite.encode_field(:y, "amplitude", type: :quantitative)
+
+# --- 2. DEFINE SCORES ---
+
+bpm = 136
+beat = 60 / bpm          # Quarter note (Kick)
+half_beat = beat / 2     # Eighth note (Hi-Hat)
+t = 0.11                 # 16th note (Lead) - approx
+
+# The Drums (4 beats loop)
+kick_score = for _ <- 1..4, do: %{note: :C, octave: 1, duration: beat}
+
+# The Hi-Hats (Off-beats: Rest, Hat, Rest, Hat...)
+# We sequence "silence" by using a dummy note with 0 volume or just careful timing.
+# Simpler approach: We sequence 8 notes, playing on the even ones.
+hat_score = 
+  Enum.flat_map(1..4, fn _ -> 
+    [
+      %{note: :rest, octave: 0, duration: half_beat}, # Silence
+      %{note: :C, octave: 0, duration: half_beat}     # Hat
+    ] 
+  end)
+  # NOTE: To make "rest" work, your sequencer needs to handle it.
+  # Hack for now: We will just generate silence in the instrument function if note is :rest
+
+# The Lead (Same as before, simplified for space)
+lead_score = [
+  %{note: :B, octave: 4, duration: t}, %{note: :B, octave: 4, duration: t},
+  %{note: :B, octave: 4, duration: t}, %{note: :B, octave: 4, duration: t},
+  %{note: :B, octave: 4, duration: t}, # Da-da-da-da-da
+  %{note: :B, octave: 4, duration: t}, %{note: :E, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t}, %{note: :E, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t}, %{note: :E, octave: 4, duration: t},
+  %{note: :E, octave: 4, duration: t}, %{note: :E, octave: 4, duration: t},
+  # (Feel free to extend this pattern)
+]
+
+
+# --- 3. GENERATE AUDIO ---
+
+# Helper to handle "rests" (silence)
+safe_hat_fn = fn freq, dur ->
+  if freq == 0, do: Audio.sine(0, dur) |> Enum.map(fn _ -> 0.0 end), else: hat_fn.(freq, dur)
+end
+
+# Update sequencer to handle :rest (returning 0 Hz)
+# You might need to tweak your get_freq to return 0 for :rest
+# Or just manually use a frequency of 0 in the score for silence.
+
+# GENERATE TRACKS
+# Note: For mixing, tracks must be roughly same length. 
+# The Lead is shorter in this example, so the drums will continue after it stops.
+kick_audio = Audio.sequence(kick_score, kick_fn)
+hat_audio  = Audio.sequence(hat_score, fn f, d -> if f < 20, do: Audio.sine(0, d) |> Enum.map(fn _->0.0 end), else: hat_fn.(f,d) end)
+lead_audio = Audio.sequence(lead_score, lead_fn)
+
+# --- 4. MIX & SAVE ---
+# We mix Kick and Lead (and Hats if you fixed the rest logic)
+full_track = Audio.mix([
+  kick_audio, 
+  lead_audio,
+  # hat_audio # Uncomment if you implemented the silence logic!
+]) 
+|> Enum.map(fn x -> x * 0.4 end) # Master Gain to prevent clipping
+|> Audio.encode_binary()
+|> Audio.save_wav("sandstorm_full.wav")
 ```

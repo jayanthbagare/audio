@@ -221,76 +221,35 @@ defmodule Audio do
   # -- Music Theory Utils ---
   # convert note and octave to frequency
   def convert_note_to_freq(note, octave) do
-    if note == :rest do
-      0.0
-    else
-      # Semitone offsets relative to C 
-      offsets = %{
-        C: 0,
-        Cs: 1,
-        D: 2,
-        Ds: 3,
-        E: 4,
-        F: 5,
-        Fs: 6,
-        G: 7,
-        Gs: 8,
-        A: 9,
-        As: 10,
-        B: 11
-      }
+    # Semitone offsets relative to C 
+    offsets = %{
+      C: 0,
+      Cs: 1,
+      D: 2,
+      Ds: 3,
+      E: 4,
+      F: 5,
+      Fs: 6,
+      G: 7,
+      Gs: 8,
+      A: 9,
+      As: 10,
+      B: 11
+    }
 
-      # calculate the distance from A4 and then get the frequency, A4 is 440hz
-      current_note_val = offsets[note] + (octave + 1) * 12
-      diff_from_a4 = current_note_val - 69
+    # calculate the distance from A4 and then get the frequency, A4 is 440hz
+    current_note_val = offsets[note] + (octave + 1) * 12
+    diff_from_a4 = current_note_val - 69
 
-      440 * :math.pow(2.0, diff_from_a4 / 12.0)
-    end
+    440 * :math.pow(2.0, diff_from_a4 / 12.0)
   end
 
   def sequence(score, instrument_fn) do
     score
     |> Enum.map(fn note_data ->
       freq = convert_note_to_freq(note_data.note, note_data.octave)
-
-      if freq == 0.0 do
-        # Generate silence for the requested duration
-        total_samples = trunc(@sample_rate * note_data.duration)
-        List.duplicate(0.0, total_samples)
-      else
-        # Call the actual instrument
-        instrument_fn.(freq, note_data.duration)
-      end
+      instrument_fn.(freq, note_data.duration)
     end)
     |> List.flatten()
-  end
-
-  # --- DRUMS ---
-
-  # Generates a Sine wave that slides from start_freq down to end_freq
-  # essential for Kick Drums and "Laser" effects.
-  def generate_pitch_slide(start_freq, end_freq, duration) do
-    total = trunc(@sample_rate * duration)
-
-    # Calculate the slope of the frequency drop (Linear chirp)
-    # f(t) = start - (drop_rate * t)
-    drop_rate = (start_freq - end_freq) / duration
-
-    0..total
-    |> Enum.map(fn i ->
-      t = i / @sample_rate
-
-      # The Phase is the Integral of Frequency: 
-      # Integral(A - Bt) = At - 0.5*B*t^2
-      phase = start_freq * t - 0.5 * drop_rate * t * t
-
-      :math.sin(2 * :math.pi() * phase)
-    end)
-  end
-
-  def generate_noise(duration) do
-    total = trunc(@sample_rate * duration)
-    # Random values between -1.0 and 1.0
-    0..total |> Enum.map(fn _ -> :rand.uniform() * 2.0 - 1.0 end)
   end
 end
