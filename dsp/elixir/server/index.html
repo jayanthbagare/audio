@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Player</title>
+</head>
+<body>
+    <h2>Select Audio Files from Your Folder</h2>
+    <input type="file" id="fileInput" accept="audio/wav, audio/mpeg" multiple>
+    <audio controls id="audioPlayer">
+        Your browser does not support the audio element.
+    </audio>
+    <div id="fileList"></div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const fileListDiv = document.getElementById('fileList');
+
+        fileInput.addEventListener('change', function(event) {
+            const files = event.target.files; // Get the selected files
+            if (files.length > 0) {
+                // Play the first selected file automatically
+                playFile(files[0]);
+
+                // Create a list of files for the user to pick from
+                fileListDiv.innerHTML = '<h3>Playlist:</h3>';
+                const ul = document.createElement('ul');
+                Array.from(files).forEach(file => {
+                    const li = document.createElement('li');
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = file.name;
+                    link.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        playFile(file);
+                    });
+                    li.appendChild(link);
+                    ul.appendChild(li);
+                });
+                fileListDiv.appendChild(ul);
+            }
+        });
+
+        function playFile(file) {
+            // Create a URL for the file object
+            const fileURL = URL.createObjectURL(file);
+            audioPlayer.src = fileURL;
+            audioPlayer.play();
+            console.log("Now playing: " + file.name);
+        }
+    </script>
+</body>
+</html>
+
